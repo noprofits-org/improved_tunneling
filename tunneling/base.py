@@ -65,6 +65,19 @@ class TunnelingResult:
             "energy_ratios": self.energy_ratios.tolist() if self.energy_ratios is not None else None,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "TunnelingResult":
+        """Reconstruct TunnelingResult from dictionary."""
+        energy_ratios = data.get("energy_ratios")
+        return cls(
+            method=data.get("method", "unknown"),
+            energies=np.array(data.get("energies", [])),
+            transmissions=np.array(data.get("transmissions", [])),
+            barrier_height=data.get("barrier_height", 0.0),
+            reduced_mass=data.get("reduced_mass", 1.0),
+            energy_ratios=np.array(energy_ratios) if energy_ratios is not None else None
+        )
+
 
 class TunnelingMethod(ABC):
     """

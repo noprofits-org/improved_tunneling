@@ -154,6 +154,35 @@ class PESScanResult:
             "barrier_height_kcal": self.barrier_height_kcal,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "PESScanResult":
+        """
+        Reconstruct PESScanResult from dictionary.
+
+        Note: This creates minimal PESScanPoint objects without full
+        molecule data, sufficient for tunneling calculations.
+        """
+        angles = data.get("angles", [])
+        energies = data.get("energies", [])
+
+        # Create minimal PESScanPoints (without full molecule geometry)
+        points = []
+        for angle, energy in zip(angles, energies):
+            points.append(PESScanPoint(
+                angle=angle,
+                energy=energy,
+                molecule=None,  # Not preserved in checkpoint
+                converged=True
+            ))
+
+        return cls(
+            scan_type=data.get("scan_type", "unknown"),
+            dihedral_atoms=data.get("dihedral_atoms", []),
+            points=points,
+            method=data.get("method", ""),
+            basis=data.get("basis", "")
+        )
+
 
 class PESScan(ABC):
     """

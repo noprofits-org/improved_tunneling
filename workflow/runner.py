@@ -138,11 +138,12 @@ class TunnelingWorkflow:
         if resume_from and resume_from.exists():
             logger.info(f"Resuming from checkpoint: {resume_from}")
             self.state = WorkflowState.load(resume_from)
+            self._rehydrate_from_state(molecule)
+        else:
+            self._molecule = molecule
 
         # Initialize engine
         self._engine.initialize(self.config.computational)
-
-        self._molecule = molecule
 
         # Determine which steps to run
         if steps is None:
@@ -343,6 +344,44 @@ class TunnelingWorkflow:
             "rates": self.state.rate_results,
             "timing": self.state.timing,
         }
+
+    def _rehydrate_from_state(self, molecule: Molecule) -> None:
+        """
+        Restore internal state from loaded WorkflowState.
+
+        Called when resuming from checkpoint to ensure internal objects
+        match the loaded state, allowing skipped steps to work correctly.
+        """
+        import numpy as np
+
+        # Start with provided molecule (may be overwritten if optimized)
+        self._molecule = molecule
+
+        # Restore optimized molecule if available
+        if self.state.optimized_molecule:
+            opt_data = self.state.optimized_molecule
+            coords = np.array(opt_data.get("coordinates", []))
+            if len(coords) > 0:
+                self._molecule = molecule.copy()
+                self._molecule.coordinates = coords
+                self._molecule.energy = opt_data.get("energy")
+            logger.info("Restored optimized molecule from checkpoint")
+
+        # Restore PES result if available
+        if self.state.pes_result:
+            self._pes_result = PESScanResult.from_dict(self.state.pes_result)
+            logger.info(f"Restored PES result: {self._pes_result.num_points} points")
+
+        # Restore tunneling results if available
+        if self.state.tunneling_results:
+            self._tunneling_results = {
+                name: TunnelingResult.from_dict(data)
+                for name, data in self.state.tunneling_results.items()
+            }
+            logger.info(f"Restored tunneling results: {list(self._tunneling_results.keys())}")
+
+        # Note: rate_results are not needed for rehydration since
+        # they are the final step and stored directly in state
 
 
 def run_h2o2_workflow(

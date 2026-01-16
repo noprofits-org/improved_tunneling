@@ -227,6 +227,11 @@ def select_tunneling_method(
     """
     Automatically select appropriate tunneling method.
 
+    Selection priority (most restrictive first):
+    1. LCT: Very light atoms with high curvature (large corner-cutting effects)
+    2. SCT: Light atoms with moderate curvature
+    3. WKB: Default for heavier atoms or low curvature
+
     Args:
         barrier_height: Barrier height in Hartree
         reduced_mass_amu: Reduced mass in AMU
@@ -235,15 +240,15 @@ def select_tunneling_method(
     Returns:
         Appropriate TunnelingMethod instance
     """
-    # For light atoms (H, D) with significant curvature, use SCT
-    if reduced_mass_amu < 2.0 and curvature_estimate > 0.5:
-        logger.info("Selecting SCT method for light atom with curvature")
-        return SCTMethod(curvature_factor=curvature_estimate)
-
-    # For very light atoms with high curvature, use LCT
+    # Check LCT first (more restrictive: very light + high curvature)
     if reduced_mass_amu < 1.5 and curvature_estimate > 1.5:
         logger.info("Selecting LCT method for very light atom with high curvature")
         return LCTMethod()
+
+    # Then check SCT (light atoms with moderate curvature)
+    if reduced_mass_amu < 2.0 and curvature_estimate > 0.5:
+        logger.info("Selecting SCT method for light atom with curvature")
+        return SCTMethod(curvature_factor=curvature_estimate)
 
     # Default to WKB for heavier atoms or low curvature
     logger.info("Selecting WKB method")

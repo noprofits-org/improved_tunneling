@@ -185,6 +185,71 @@ class Molecule:
         return cls(atoms=atoms, charge=charge, multiplicity=multiplicity, name=name)
 
     @classmethod
+    def from_xyz_string(cls, xyz_string: str, charge: int = 0,
+                        multiplicity: int = 1) -> "Molecule":
+        """
+        Create a molecule from XYZ format string.
+
+        Args:
+            xyz_string: XYZ format string (n_atoms, comment, coordinates)
+            charge: Molecular charge
+            multiplicity: Spin multiplicity
+
+        Returns:
+            Molecule object
+
+        Example:
+            >>> xyz = '''3
+            ... Water molecule
+            ... O   0.000000   0.000000   0.117369
+            ... H   0.756950   0.000000  -0.469475
+            ... H  -0.756950   0.000000  -0.469475
+            ... '''
+            >>> mol = Molecule.from_xyz_string(xyz)
+        """
+        lines = xyz_string.strip().split('\n')
+        if len(lines) < 3:
+            raise ValueError("XYZ string must have at least 3 lines")
+
+        try:
+            n_atoms = int(lines[0].strip())
+        except ValueError:
+            raise ValueError(f"First line must be atom count, got: {lines[0]}")
+
+        name = lines[1].strip()  # Comment line
+
+        if len(lines) < n_atoms + 2:
+            raise ValueError(f"Expected {n_atoms} atom lines, got {len(lines) - 2}")
+
+        symbols = []
+        coordinates = []
+        for i in range(n_atoms):
+            line = lines[i + 2].strip()
+            if not line:
+                raise ValueError(f"Expected atom on line {i + 3}, got blank line")
+            parts = line.split()
+            if len(parts) < 4:
+                raise ValueError(f"Invalid coordinate line {i + 3}: {line}")
+            symbols.append(parts[0])
+            try:
+                coords = [float(parts[1]), float(parts[2]), float(parts[3])]
+            except ValueError:
+                raise ValueError(f"Invalid coordinates on line {i + 3}: {line}")
+            coordinates.append(coords)
+
+        # Verify we parsed exactly n_atoms
+        if len(symbols) != n_atoms:
+            raise ValueError(f"Expected {n_atoms} atoms, parsed {len(symbols)}")
+
+        return cls.from_arrays(
+            symbols=symbols,
+            coordinates=np.array(coordinates),
+            charge=charge,
+            multiplicity=multiplicity,
+            name=name
+        )
+
+    @classmethod
     def h2o2(cls, dihedral: float = 111.5) -> "Molecule":
         """
         Create a hydrogen peroxide molecule with specified dihedral angle.

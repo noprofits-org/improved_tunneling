@@ -4,47 +4,78 @@
 
 ---
 
-## Tier 1: Fundamental Improvements (High Priority)
+## ✅ Completed
 
-### 1. Implement Ring-Polymer Instanton (RPI) Method
-**Why**: RPI is the current gold standard for tunneling calculations, not WKB/SCT.
-
-**Options**:
-- **Interface with i-PI 3.0** (recommended) - Released August 2024, well-tested implementation
-- Implement from scratch using Richardson's formulation
-
-```python
-# Example architecture
-class RingPolymerInstanton:
-    def __init__(self, n_beads=32, temperature=300):
-        self.n_beads = n_beads
-        self.beta_n = 1 / (n_beads * kB * temperature)
-
-    def optimize_instanton(self, initial_path, calculator):
-        """Find saddle point on ring-polymer potential surface."""
-        pass
-
-    def compute_tunneling_rate(self, instanton, hessian):
-        """Rate from instanton action and fluctuation determinant."""
-        pass
-```
-
-**Key reference**: Litman et al., [J. Chem. Phys. 159, 014111 (2023)](https://pubs.aip.org/aip/jcp/article/159/1/014111) - Perturbatively corrected RPI achieves 2% accuracy for malonaldehyde.
-
-### 2. Add Unit Tests
-Essential for reliability, especially before adding instanton:
+### Unit Tests (151 tests passing)
 ```
 tests/
-├── test_molecule.py
-├── test_reduced_mass.py
-├── test_interpolation.py
-├── test_wkb.py           # Compare with analytical Eckart
-├── test_rates.py
-└── test_integration.py   # Full workflow
+├── test_molecule.py       # 21 tests - Atom, Molecule, geometry, isotopes
+├── test_reduced_mass.py   # 12 tests - Torsional reduced mass calculations
+├── test_interpolation.py  # 14 tests - Periodic cubic spline
+├── test_tunneling.py      # 18 tests - WKB, Eckart, SCT methods
+├── test_kinetics.py       # 15 tests - Rate calculations, Arrhenius
+├── test_workflow.py       # 20 tests - Full workflow integration
+├── test_ipi.py            # 24 tests - i-PI socket communication
+└── test_visualization.py  # 19 tests - Plotting functions
 ```
 
-### 3. Benchmark Against Literature
-Validate against established systems:
+### i-PI Interface Module
+Created `instanton/` module for Ring-Polymer Instanton calculations:
+- `ipi_client.py` - Socket client for i-PI communication (POSDATA/GETFORCE protocol)
+- `ipi_driver.py` - Psi4 driver that acts as i-PI client (receives geometries, returns forces)
+- `ipi_input.py` - i-PI XML input file generator for various calculation types:
+  - `generate_instanton_input()` - Ring-polymer instanton optimization
+  - `generate_geop_input()` - Geometry optimization
+  - `generate_neb_input()` - Nudged elastic band calculations
+  - `generate_md_input()` - Molecular dynamics
+  - `create_driver_script()` - Generate Psi4 driver scripts
+- Mock driver for testing without Psi4
+- Full test coverage with mock i-PI server
+
+### Visualization Module
+Created `visualization/` module:
+- `pes_plot.py` - PES plotting (single, comparison, with tunneling region)
+- `transmission_plot.py` - Transmission coefficient T(E) plots
+- `arrhenius_plot.py` - Arrhenius plots, KIE analysis
+- `instanton_plot.py` - Ring-polymer visualization, instanton path plots
+
+### Benchmark Infrastructure
+Created `benchmarks/` module:
+- `reference_data.py` - Literature values for malonaldehyde (21.6 cm⁻¹), H₂O₂, formic acid dimer, tropolone
+- `molecules.py` - Factory functions for benchmark molecules with accurate geometries
+- `run_benchmark.py` - Command-line benchmark runner
+
+---
+
+## Tier 1: Fundamental Improvements (High Priority)
+
+### 1. ✅ i-PI Integration Complete
+The i-PI interface is implemented and tested. Next: test with actual i-PI installation.
+
+**To run with real i-PI:**
+```bash
+# Start i-PI server
+i-pi input.xml &
+
+# Run Psi4 driver
+python -c "
+from improved_tunnel.instanton import Psi4IPIDriver
+driver = Psi4IPIDriver(port=31415, method='MP2', basis='cc-pVDZ')
+driver.run(symbols=['H', 'O', 'O', 'H'])
+"
+```
+
+### 2. Ring-Polymer Instanton Optimization
+Now that the i-PI interface exists, implement the instanton-specific workflow:
+- Generate initial ring-polymer path between reactant/product
+- Set up i-PI input file for instanton optimization
+- Post-process instanton for rate calculation
+
+### 3. Benchmark with Real Calculations
+Run malonaldehyde and H₂O₂ benchmarks with actual Psi4:
+```bash
+python -m improved_tunnel.benchmarks.run_benchmark --system malonaldehyde --real
+```
 
 | System | Experimental | Target Accuracy |
 |--------|--------------|-----------------|
@@ -153,12 +184,15 @@ WKB typically overestimates tunneling half-lives:
 ## Recommended Execution Order
 
 ```
-Week 1-2:  Unit tests for existing code
-Week 3-4:  i-PI interface OR basic instanton implementation
-Week 5:    Malonaldehyde benchmark
-Week 6-7:  ORCA integration
-Week 8:    Visualization module
-Week 9+:   Delta-ML, GPR acceleration
+✅ DONE:   Unit tests (151 passing)
+✅ DONE:   i-PI interface module (client, driver, input generator)
+✅ DONE:   Visualization module (PES, transmission, Arrhenius, instanton)
+✅ DONE:   Benchmark infrastructure (malonaldehyde, H₂O₂)
+
+NEXT:     Test with real i-PI installation
+NEXT:     Run benchmarks with real Psi4
+THEN:     ORCA integration
+LATER:    Delta-ML, GPR acceleration
 ```
 
 ---

@@ -12,6 +12,7 @@ HBAR = HBAR_SI  # Alias for convenience
 # Boltzmann constant
 BOLTZMANN_SI = 1.380649e-23  # J/K (exact)
 BOLTZMANN = BOLTZMANN_SI  # Alias for convenience
+BOLTZMANN_HARTREE = 3.1668115634556e-6  # Hartree/K (kB in atomic units)
 
 # Speed of light
 C_SI = 299792458  # m/s (exact)

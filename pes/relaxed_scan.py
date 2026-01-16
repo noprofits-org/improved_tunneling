@@ -13,6 +13,25 @@ from ..core.exceptions import ConvergenceError
 logger = logging.getLogger(__name__)
 
 
+def _periodic_angle_diff(angle1: float, angle2: float) -> float:
+    """
+    Calculate minimum angle difference accounting for periodicity.
+
+    Handles wrap-around at 0/360 degrees properly.
+
+    Args:
+        angle1: First angle in degrees
+        angle2: Second angle in degrees
+
+    Returns:
+        Absolute minimum difference in degrees (0 to 180)
+    """
+    diff = (angle1 - angle2) % 360
+    if diff > 180:
+        diff = 360 - diff
+    return abs(diff)
+
+
 class RelaxedPESScan(PESScan):
     """
     Relaxed PES scan with constrained optimization.
@@ -74,15 +93,17 @@ class RelaxedPESScan(PESScan):
                 result = self.engine.optimize_geometry(mol_at_angle, constraints)
                 converged = result.converged
 
-                # Verify the dihedral is close to target
+                # Verify the dihedral is close to target (with periodic wrapping)
                 actual_dihedral = calculate_dihedral(result.molecule, i, j, k, l)
-                if abs(actual_dihedral - angle) > 5.0:  # Allow some tolerance
+                angle_diff = _periodic_angle_diff(actual_dihedral, angle)
+                if angle_diff > 5.0:  # Allow some tolerance
                     # Dihedral drifted, use single-point instead
                     logger.warning(
                         f"Dihedral drifted to {actual_dihedral:.1f}° "
-                        f"(target: {angle:.1f}°). Using rigid point."
+                        f"(target: {angle:.1f}°, diff: {angle_diff:.1f}°). Using rigid point."
                     )
                     result = self.engine.single_point_energy(mol_at_angle)
+                    converged = False  # Mark as not converged since we fell back
 
             except ConvergenceError as e:
                 logger.warning(f"Optimization failed at {angle}°: {e}. Using rigid point.")

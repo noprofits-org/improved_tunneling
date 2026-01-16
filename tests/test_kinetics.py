@@ -311,6 +311,103 @@ class TestWignerCorrection:
         assert kappa_low > kappa_high
 
 
+class TestTunnelingCorrectionAnalytic:
+    """Analytic tests for tunneling correction factor κ."""
+
+    def test_kappa_with_perfect_transmission(self):
+        """
+        Test κ with P(E) = 1 for all sub-barrier energies.
+
+        For P(E) = 1:
+            κ = (1/kT) * ∫₀^V P(E) * exp(-(E-V)/kT) dE + 1
+              = (1/kT) * ∫₀^V exp(-(E-V)/kT) dE + 1
+
+        With substitution u = V - E:
+            = (1/kT) * kT * (exp(V/kT) - 1) + 1
+            = exp(V/kT)
+
+        Physical meaning: With perfect transmission, all particles can tunnel,
+        so the rate enhancement is exp(V/kT) relative to classical.
+        """
+        from improved_tunnel.core.constants import BOLTZMANN_SI, HARTREE_TO_JOULE
+
+        # Choose parameters
+        barrier_hartree = 0.01  # ~6.3 kcal/mol
+        temperature = 300  # K
+
+        # Create fine energy grid from 0 to just below barrier
+        n_points = 1000
+        energies = np.linspace(0.001 * barrier_hartree, 0.999 * barrier_hartree, n_points)
+        # Perfect transmission
+        transmissions = np.ones(n_points)
+
+        result = TunnelingResult(
+            method="analytic_test",
+            energies=energies,
+            transmissions=transmissions,
+            barrier_height=barrier_hartree,
+            reduced_mass=1.0,
+        )
+
+        kappa = calculate_tunneling_correction(result, barrier_hartree, temperature)
+
+        # Analytic result: κ = exp(V/kT)
+        kT = BOLTZMANN_SI * temperature
+        V_joules = barrier_hartree * HARTREE_TO_JOULE
+        kappa_analytic = np.exp(V_joules / kT)
+
+        # Should match within numerical integration tolerance
+        # The discrete grid will underestimate slightly since we don't go all the way to E=0
+        assert_allclose(kappa, kappa_analytic, rtol=0.05)
+
+    def test_kappa_with_zero_transmission(self):
+        """
+        Test κ with P(E) = 0 for all sub-barrier energies.
+
+        For P(E) = 0: κ = 0 + 1 = 1 (no tunneling contribution).
+        """
+        barrier_hartree = 0.01
+        temperature = 300
+
+        energies = np.linspace(0.1 * barrier_hartree, 0.9 * barrier_hartree, 50)
+        transmissions = np.zeros(50)  # No transmission
+
+        result = TunnelingResult(
+            method="analytic_test",
+            energies=energies,
+            transmissions=transmissions,
+            barrier_height=barrier_hartree,
+            reduced_mass=1.0,
+        )
+
+        kappa = calculate_tunneling_correction(result, barrier_hartree, temperature)
+
+        # Should be exactly 1 (classical limit)
+        assert_allclose(kappa, 1.0, atol=1e-10)
+
+    def test_kappa_always_at_least_one(self):
+        """Test that κ >= 1 for any valid transmission."""
+        barrier_hartree = 0.01
+        temperature = 300
+
+        # Realistic small transmissions
+        energies = np.linspace(0.1 * barrier_hartree, 0.9 * barrier_hartree, 20)
+        transmissions = 1e-8 * np.ones(20)  # Tiny but non-zero
+
+        result = TunnelingResult(
+            method="test",
+            energies=energies,
+            transmissions=transmissions,
+            barrier_height=barrier_hartree,
+            reduced_mass=1.0,
+        )
+
+        kappa = calculate_tunneling_correction(result, barrier_hartree, temperature)
+
+        # Must always be >= 1
+        assert kappa >= 1.0
+
+
 class TestKIE:
     """Tests for kinetic isotope effect calculations."""
 

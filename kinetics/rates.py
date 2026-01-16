@@ -119,15 +119,26 @@ def calculate_tunneling_correction(
     temperature: float
 ) -> float:
     """
-    Calculate Boltzmann-weighted tunneling correction factor κ.
+    Calculate semiclassical tunneling correction factor κ.
 
-    κ = <T(E)>_Boltzmann / T(E_b)
+    The tunneling correction compares quantum flux (which includes tunneling)
+    to classical flux (which requires E >= V):
 
-    where <T(E)> is the Boltzmann average of the transmission coefficient
-    and T(E_b) is transmission at the barrier height.
+        κ(T) = (1/kT) * ∫₀^∞ P(E) * exp(-(E-V)/kT) dE
 
-    For accurate tunneling-corrected rates:
-        k_quantum = k_classical * κ
+    This splits into tunneling (E < V) and classical (E >= V) contributions:
+
+        κ(T) = (1/kT) * [∫₀^V P(E) * exp(-(E-V)/kT) dE + ∫_V^∞ P(E) * exp(-(E-V)/kT) dE]
+
+    For E >= V, P(E) ≈ 1 (classical transmission), giving:
+        classical_tail = (1/kT) * ∫_V^∞ exp(-(E-V)/kT) dE = 1
+
+    So: κ = tunneling_contribution + 1
+
+    Physical interpretation:
+    - Classical particles (E >= V): contribute κ = 1
+    - Tunneling particles (E < V): add extra contribution from P(E) > 0
+    - κ > 1 indicates tunneling enhancement
 
     Args:
         tunneling_result: Tunneling calculation result
@@ -135,7 +146,7 @@ def calculate_tunneling_correction(
         temperature: Temperature in Kelvin
 
     Returns:
-        Tunneling correction factor κ
+        Tunneling correction factor κ (>= 1)
     """
     if temperature <= 0 or barrier_height <= 0:
         return 1.0
@@ -146,28 +157,42 @@ def calculate_tunneling_correction(
     energies = tunneling_result.energies
     transmissions = tunneling_result.transmissions
 
+    if len(energies) < 2:
+        return 1.0
+
     # Convert energies to Joules
     energies_J = energies * HARTREE_TO_JOULE
 
-    # Boltzmann weights
-    boltzmann_weights = np.exp(-(barrier_J - energies_J) / kT)
-
-    # Weighted average of transmission
-    # Only include energies below barrier for meaningful average
-    mask = energies < barrier_height
+    # Only integrate over sub-barrier energies for tunneling contribution
+    # The above-barrier classical tail is added analytically as +1
+    mask = energies_J < barrier_J
     if not np.any(mask):
+        # No sub-barrier data - return classical value
         return 1.0
 
-    numerator = np.sum(transmissions[mask] * boltzmann_weights[mask])
-    denominator = np.sum(boltzmann_weights[mask])
+    sub_barrier_E = energies_J[mask]
+    sub_barrier_T = transmissions[mask]
 
-    if denominator < 1e-300:
-        return 1.0
+    # Energy spacing for numerical integration (trapezoidal)
+    if len(sub_barrier_E) > 1:
+        dE = np.diff(sub_barrier_E)
+        dE = np.append(dE, dE[-1])  # Extend for last point
+    else:
+        dE = np.array([barrier_J - sub_barrier_E[0]])  # Single point
 
-    kappa = numerator / denominator
+    # Boltzmann factor relative to barrier: exp(-(E-V)/kT)
+    # For E < V, this gives weight > 1 (exponentially enhanced)
+    relative_weights = np.exp(-(sub_barrier_E - barrier_J) / kT)
 
-    # kappa should be >= 1 (tunneling enhances rate)
-    return max(1.0, kappa)
+    # Tunneling contribution: (1/kT) * ∫₀^V P(E) * exp(-(E-V)/kT) dE
+    tunneling_integral = np.sum(sub_barrier_T * relative_weights * dE)
+    tunneling_contribution = tunneling_integral / kT
+
+    # Total κ = tunneling contribution + classical tail (=1)
+    # Classical tail: (1/kT) * ∫_V^∞ exp(-(E-V)/kT) dE = 1
+    kappa = tunneling_contribution + 1.0
+
+    return kappa
 
 
 def calculate_quantum_rate(

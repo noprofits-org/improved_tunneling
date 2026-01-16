@@ -201,42 +201,58 @@ class Psi4Engine(QChemEngine):
         )
 
     def _set_constraints(self, constraints: Dict[str, Any]) -> None:
-        """Set geometry constraints in Psi4."""
-        opt_coords = []
+        """
+        Set geometry constraints in Psi4 using optking.
 
+        Psi4/optking uses:
+        - frozen_*: freeze at current geometry value
+        - fixed_*: constrain to a specified value
+
+        For PES scans, we use fixed_* with target values.
+        """
+        options = {'geom_maxiter': 100}
+
+        # Dihedral constraint - use fixed_dihedral with value
         if "frozen_dihedral" in constraints:
             c = constraints["frozen_dihedral"]
             atoms = c["atoms"]
-            value = c["value"]
+            value = c.get("value")
             # Psi4 uses 1-indexed atoms
-            opt_coords.append(
-                f"D {atoms[0]+1} {atoms[1]+1} {atoms[2]+1} {atoms[3]+1} = {value}"
-            )
+            # Format: "atom1 atom2 atom3 atom4 value"
+            if value is not None:
+                # Use fixed_dihedral to constrain to specific value
+                fixed_str = f"{atoms[0]+1} {atoms[1]+1} {atoms[2]+1} {atoms[3]+1} {value}"
+                options['optking__fixed_dihedral'] = fixed_str
+            else:
+                # No value specified - freeze at current geometry
+                frozen_str = f"{atoms[0]+1} {atoms[1]+1} {atoms[2]+1} {atoms[3]+1}"
+                options['optking__frozen_dihedral'] = frozen_str
 
+        # Distance constraint
         if "frozen_distance" in constraints:
             c = constraints["frozen_distance"]
             atoms = c["atoms"]
-            value = c["value"]
-            opt_coords.append(f"R {atoms[0]+1} {atoms[1]+1} = {value}")
+            value = c.get("value")
+            if value is not None:
+                fixed_str = f"{atoms[0]+1} {atoms[1]+1} {value}"
+                options['optking__fixed_distance'] = fixed_str
+            else:
+                frozen_str = f"{atoms[0]+1} {atoms[1]+1}"
+                options['optking__frozen_distance'] = frozen_str
 
+        # Angle constraint
         if "frozen_angle" in constraints:
             c = constraints["frozen_angle"]
             atoms = c["atoms"]
-            value = c["value"]
-            opt_coords.append(f"A {atoms[0]+1} {atoms[1]+1} {atoms[2]+1} = {value}")
+            value = c.get("value")
+            if value is not None:
+                fixed_str = f"{atoms[0]+1} {atoms[1]+1} {atoms[2]+1} {value}"
+                options['optking__fixed_bend'] = fixed_str
+            else:
+                frozen_str = f"{atoms[0]+1} {atoms[1]+1} {atoms[2]+1}"
+                options['optking__frozen_bend'] = frozen_str
 
-        if opt_coords:
-            constraint_str = "\n".join(opt_coords)
-            self._psi4.set_options({
-                'optking__frozen_dihedral': constraint_str if "frozen_dihedral" in constraints else "",
-                'geom_maxiter': 100,
-            })
-
-            # Use optking's constraint mechanism
-            if "frozen_dihedral" in constraints:
-                c = constraints["frozen_dihedral"]
-                frozen = f"{c['atoms'][0]+1} {c['atoms'][1]+1} {c['atoms'][2]+1} {c['atoms'][3]+1}"
-                self._psi4.set_options({'optking__frozen_dihedral': frozen})
+        self._psi4.set_options(options)
 
     def _clear_constraints(self) -> None:
         """Clear all geometry constraints."""
@@ -244,6 +260,9 @@ class Psi4Engine(QChemEngine):
             'optking__frozen_dihedral': "",
             'optking__frozen_distance': "",
             'optking__frozen_bend': "",
+            'optking__fixed_dihedral': "",
+            'optking__fixed_distance': "",
+            'optking__fixed_bend': "",
         })
 
     def cleanup(self) -> None:
